@@ -125,6 +125,11 @@ class NeedsBuildError(Exception):
         self.service = service
 
 
+class NeedsPullError(Exception):
+    def __init__(self, service):
+        self.service = service
+
+
 class NoSuchImageError(Exception):
     pass
 
@@ -162,6 +167,13 @@ class BuildAction(enum.Enum):
     none = 0
     force = 1
     skip = 2
+
+
+@enum.unique
+class PullStrategy(enum.Enum):
+    always = 0
+    missing = 1
+    never = 2
 
 
 class Service:
@@ -342,10 +354,19 @@ class Service:
             raise OperationFailedError("Cannot create container for service %s: %s" %
                                        (self.name, binarystr_to_unicode(ex.explanation)))
 
-    def ensure_image_exists(self, do_build=BuildAction.none, silent=False, cli=False):
+    def ensure_image_exists(
+        self,
+        do_build=BuildAction.none,
+        pull_strategy=PullStrategy.missing,
+        silent=False,
+        cli=False
+    ):
         if self.can_be_built() and do_build == BuildAction.force:
             self.build(cli=cli)
             return
+
+        if not self.can_be_built() and pull_strategy == PullStrategy.always:
+            self.pull(silent=silent)
 
         try:
             self.image()
@@ -354,8 +375,11 @@ class Service:
             pass
 
         if not self.can_be_built():
-            self.pull(silent=silent)
-            return
+            if pull_strategy == PullStrategy.missing:
+                self.pull(silent=silent)
+                return
+            else:
+                raise NeedsPullError(self)
 
         if do_build == BuildAction.skip:
             raise NeedsBuildError(self)
