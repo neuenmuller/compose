@@ -35,6 +35,7 @@ from .service import NetworkMode
 from .service import NoSuchImageError
 from .service import parse_repository_tag
 from .service import PidMode
+from .service import PullStrategy
 from .service import Service
 from .service import ServiceIpcMode
 from .service import ServiceNetworkMode
@@ -634,6 +635,7 @@ class Project:
            start_deps=True,
            strategy=ConvergenceStrategy.changed,
            do_build=BuildAction.none,
+           pull_strategy=PullStrategy.missing,
            timeout=None,
            detached=False,
            remove_orphans=False,
@@ -667,7 +669,12 @@ class Project:
             include_deps=start_deps)
 
         for svc in services:
-            svc.ensure_image_exists(do_build=do_build, silent=silent, cli=cli)
+            svc.ensure_image_exists(
+                do_build=do_build,
+                pull_strategy=pull_strategy,
+                silent=silent,
+                cli=cli
+            )
         plans = self._get_convergence_plans(
             services,
             strategy,

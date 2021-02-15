@@ -38,7 +38,9 @@ from ..service import BuildError
 from ..service import ConvergenceStrategy
 from ..service import ImageType
 from ..service import NeedsBuildError
+from ..service import NeedsPullError
 from ..service import OperationFailedError
+from ..service import PullStrategy
 from ..utils import filter_attached_for_up
 from .colors import AnsiMode
 from .command import get_config_from_options
@@ -95,6 +97,11 @@ def main():  # noqa: C901
     except NeedsBuildError as e:
         exit_with_metrics(command,
                           "Service '{}' needs to be built, but --no-build was passed.".format(
+                              e.service.name), status=Status.FAILURE)
+    except NeedsPullError as e:
+        exit_with_metrics(command,
+                          ("Service '{}' needs to be pulled, but "
+                           "`--pull never` was passed.").format(
                               e.service.name), status=Status.FAILURE)
     except NoSuchCommand as e:
         commands = "\n".join(parse_doc_section("commands:", getdoc(e.supercommand)))
@@ -1095,6 +1102,8 @@ class TopLevelCommand:
             --no-build                 Don't build an image, even if it's missing.
             --no-start                 Don't start the services after creating them.
             --build                    Build images before starting containers.
+            --pull STRATEGY            Pull images before starting containers
+                                       ("always"|"missing"|"never"). (default: "missing")
             --abort-on-container-exit  Stops all containers if any container was
                                        stopped. Incompatible with -d.
             --attach-dependencies      Attach to dependent containers.
@@ -1147,6 +1156,7 @@ class TopLevelCommand:
                     start_deps=start_deps,
                     strategy=convergence_strategy_from_opts(options),
                     do_build=build_action_from_opts(options),
+                    pull_strategy=pull_strategy_from_opts(options),
                     timeout=timeout,
                     detached=detached,
                     remove_orphans=remove_orphans,
@@ -1348,6 +1358,18 @@ def build_action_from_opts(options):
         return BuildAction.skip
 
     return BuildAction.none
+
+
+def pull_strategy_from_opts(options):
+    if not options['--pull']:
+        return PullStrategy.missing
+
+    if options['--pull'] == 'always':
+        return PullStrategy.always
+    elif options['--pull'] == 'never':
+        return PullStrategy.never
+
+    return PullStrategy.missing
 
 
 def build_one_off_container_options(options, detach, command):

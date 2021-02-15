@@ -34,9 +34,11 @@ from compose.service import get_container_data_volumes
 from compose.service import ImageType
 from compose.service import merge_volume_bindings
 from compose.service import NeedsBuildError
+from compose.service import NeedsPullError
 from compose.service import NetworkMode
 from compose.service import NoSuchImageError
 from compose.service import parse_repository_tag
+from compose.service import PullStrategy
 from compose.service import rewrite_build_path
 from compose.service import Service
 from compose.service import ServiceNetworkMode
@@ -576,6 +578,34 @@ class ServiceTest(unittest.TestCase):
         assert not mock_log.warning.called
         assert self.mock_client.build.call_count == 1
         self.mock_client.build.call_args[1]['tag'] == 'default_foo'
+
+    def test_ensure_image_exists_pull_missing_has_image(self):
+        service = Service('foo', client=self.mock_client, image='fooimage:latest')
+        self.mock_client.inspect_image.return_value = {'Id': 'abc123'}
+
+        service.ensure_image_exists(pull_strategy=PullStrategy.missing)
+        assert self.mock_client.pull.call_count == 0
+
+    def test_ensure_image_exists_pull_missing_no_image(self):
+        service = Service('foo', client=self.mock_client, image='fooimage:latest')
+        self.mock_client.inspect_image.side_effect = NoSuchImageError
+
+        service.ensure_image_exists(pull_strategy=PullStrategy.missing)
+        assert self.mock_client.pull.call_count == 1
+
+    def test_ensure_image_exists_pull_always(self):
+        service = Service('foo', client=self.mock_client, image='fooimage:latest')
+
+        service.ensure_image_exists(pull_strategy=PullStrategy.always)
+        assert self.mock_client.pull.call_count == 1
+        assert self.mock_client.inspect_image.call_count == 0
+
+    def test_ensure_image_exists_pull_never(self):
+        service = Service('foo', client=self.mock_client, image='fooimage:latest')
+        self.mock_client.inspect_image.side_effect = NoSuchImageError
+
+        with pytest.raises(NeedsPullError):
+            service.ensure_image_exists(pull_strategy=PullStrategy.never)
 
     def test_build_does_not_pull(self):
         self.mock_client.build.return_value = [
