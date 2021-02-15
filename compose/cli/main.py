@@ -101,7 +101,7 @@ def main():  # noqa: C901
     except NeedsPullError as e:
         exit_with_metrics(command,
                           ("Service '{}' needs to be pulled, but "
-                           "`--pull-strategy never` was passed.").format(
+                           "`--pull never` was passed.").format(
                               e.service.name), status=Status.FAILURE)
     except NoSuchCommand as e:
         commands = "\n".join(parse_doc_section("commands:", getdoc(e.supercommand)))

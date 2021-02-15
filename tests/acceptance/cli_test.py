@@ -23,6 +23,7 @@ from compose.const import COMPOSE_SPEC as VERSION
 from compose.const import COMPOSEFILE_V1 as V1
 from compose.container import Container
 from compose.project import OneOffFilter
+from compose.service import ImageType
 from compose.utils import nanoseconds_from_time_seconds
 from tests.integration.testcases import DockerClientTestCase
 from tests.integration.testcases import get_links
@@ -735,6 +736,51 @@ services:
             'Pulling db (busybox:1.27.2)...',
             'Pulling web (busybox:1.27.2)...',
         ]
+
+    def test_up_with_pull_always(self):
+        result1 = self.dispatch(['up', '-d', '--pull', 'always'])
+        assert 'Pulling simple' in result1.stderr
+        assert 'Pulling another' in result1.stderr
+
+        result2 = self.dispatch(['up', '-d', '--pull', 'always'])
+        assert 'Pulling simple' in result2.stderr
+        assert 'Pulling another' in result2.stderr
+
+    def test_up_with_pull_missing(self):
+        self.project.remove_images(ImageType.all)
+
+        result = self.dispatch(['up', '-d', '--pull', 'missing'])
+        assert 'Pulling simple' in result.stderr
+        assert 'Pulling another' in result.stderr
+
+    def test_up_with_pull_never(self):
+        self.base_dir = 'tests/fixtures/v2-simple'
+        self._project = get_project(self.base_dir, ['one-container.yml'])
+        self.project.remove_images(ImageType.all)
+
+        result = self.dispatch(['-f', 'one-container.yml', 'up', '-d', '--pull', 'never'], returncode=1)
+        assert ("Service 'simple' needs to be pulled, but `--pull never` was passed."
+                in result.stderr)
+
+    def test_up_with_pull_arg_invalid(self):
+        # should fallback to `--pull missing`
+        self.project.pull()
+
+        result = self.dispatch(['up', '-d', '--pull', 'thisisinvalidstrategy'])
+        assert 'Pulling simple' not in result.stderr
+        assert 'Pulling another' not in result.stderr
+
+    def test_up_with_pull_arg_missing(self):
+        # should emit help
+        result = self.dispatch(['up', '-d', '--pull'])
+        assert 'Usage: up [options] [--scale SERVICE=NUM...] [--] [SERVICE...]' in result.stderr
+
+    def test_up_with_pull_always_build(self):
+        self.base_dir = 'tests/fixtures/simple-dockerfile'
+        self._project = get_project(self.base_dir, ['build-and-pull.yml'])
+        result = self.dispatch(['-f', 'build-and-pull.yml', 'up', '-d', '--build', '--pull', 'always'])
+        assert 'Building simple' in result.stderr
+        assert 'Pulling another' in result.stderr
 
     def test_build_plain(self):
         self.base_dir = 'tests/fixtures/simple-dockerfile'

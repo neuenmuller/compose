@@ -367,6 +367,7 @@ class Service:
 
         if not self.can_be_built() and pull_strategy == PullStrategy.always:
             self.pull(silent=silent)
+            return
 
         try:
             self.image()
